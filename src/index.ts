@@ -17,7 +17,7 @@ app.get("/healthz", async (c) => {
 
 app.doc("/openapi.json", {
   openapi: "3.1.0",
-  info: { title: "ClinicalTrials.gov v2 Clean REST Wrapper", version: "0.1.0", description: "Flattened, cached REST wrapper over the ClinicalTrials.gov v2 API. Normalizes the nested study schema into a flat record per trial with stable identifiers, normalized sponsor and condition fields, and indexed status and date columns for efficient filtering. Backed by a periodically refreshed mirror of the public dataset." },
+  info: { title: "ClinicalTrials.gov Clean REST Wrapper", version: "0.1.0", description: "A flattened, cache-friendly REST wrapper around the ClinicalTrials.gov v2 API. Normalizes the deeply nested protocol section into a single flat resource per study, exposing stable NCT identifiers, status, phase, sponsor, condition, and key date fields suitable for filtering and indexing by pharma, CRO, and compliance applications." },
   servers: [{ url: "https://clinicaltrials-clean.workers.dev" }],
 });
 app.get("/docs", swaggerUI({ url: "/openapi.json" }));
