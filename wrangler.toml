@@ -1,0 +1,19 @@
+name = "clinicaltrials-clean"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "db-clinicaltrials-clean"
+database_id = "6d04e55c-47a5-4425-8c4f-22e548da2bf2"
+
+[triggers]
+crons = ["0 */6 * * *"]
+
+[observability]
+enabled = true
+
+[vars]
+PRODUCT_SLUG = "clinicaltrials-clean"
+SOURCE_URL = "https://clinicaltrials.gov/data-api/api"
