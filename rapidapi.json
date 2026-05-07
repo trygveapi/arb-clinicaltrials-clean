@@ -1,0 +1,76 @@
+{
+  "name": "ClinicalTrials.gov v2 \u2014 Clean REST Wrapper",
+  "description": "The raw ClinicalTrials.gov v2 API returns FHIR-style nested JSON. A sponsor name sits 4 levels deep; conditions come back as coded arrays; phase labels vary by casing across records. This wrapper flattens every study into a single-level object \u2014 `study.sponsor`, `study.conditions[]`, `study.phase`, `study.status` \u2014 so you can filter, sort, and store without writing a schema traversal layer first.\n\nOn top of normalization, the wrapper deduplicates sponsor names against a canonical lookup table (`\"Pfizer Inc.\"`, `\"PFIZER\"`, and `\"Pfizer\"` resolve to one key), caches responses with a configurable TTL, and fires status-change webhooks. When a trial moves from `RECRUITING` to `ACTIVE_NOT_RECRUITING`, your endpoint receives a POST containing the NCT ID, old status, new status, timestamp, and a field diff.\n\nThe underlying dataset covers 500,000+ studies across 221 countries, refreshed daily by ClinicalTrials.gov. Pharma developers and compliance teams use it to track competitor pipelines, monitor regulatory milestones, and feed trial-matching engines. Authentication and rate limiting live in this wrapper; the upstream ClinicalTrials.gov endpoint requires neither.",
+  "category": "clinical-trials",
+  "tags": [
+    "clinical-trials",
+    "pharma",
+    "biotech",
+    "healthcare",
+    "fhir",
+    "rest",
+    "json",
+    "life-sciences"
+  ],
+  "baseUrl": "https://clinicaltrials-clean.trygve-api.workers.dev",
+  "openApiSpecUrl": "https://clinicaltrials-clean.trygve-api.workers.dev/openapi.json",
+  "pricingPlans": [
+    {
+      "name": "Free",
+      "price_usd": 0,
+      "monthly_quota": 100
+    },
+    {
+      "name": "Starter",
+      "price_usd": 9,
+      "monthly_quota": 10000
+    },
+    {
+      "name": "Pro",
+      "price_usd": 29,
+      "monthly_quota": 100000
+    }
+  ],
+  "useCases": [
+    {
+      "title": "Search recruiting trials by condition and phase",
+      "curl": "curl -H 'Authorization: Bearer KEY' \\\n  'https://clinicaltrials-clean.trygve-api.workers.dev/studies?condition=NSCLC&phase=2&status=RECRUITING&limit=10'",
+      "python": "import httpx\n\nr = httpx.get(\n    \"https://clinicaltrials-clean.trygve-api.workers.dev/studies\",\n    headers={\"Authorization\": \"Bearer KEY\"},\n    params={\"condition\": \"NSCLC\", \"phase\": \"2\", \"status\": \"RECRUITING\", \"limit\": 10},\n)\nfor s in r.json()[\"studies\"]:\n    print(s[\"nct_id\"], s[\"sponsor\"], s[\"title\"])",
+      "js": "const r = await fetch(\n  \"https://clinicaltrials-clean.trygve-api.workers.dev/studies?condition=NSCLC&phase=2&status=RECRUITING&limit=10\",\n  { headers: { Authorization: \"Bearer KEY\" } }\n);\nconst { studies } = await r.json();\nstudies.forEach(s => console.log(s.nct_id, s.sponsor, s.title));"
+    },
+    {
+      "title": "Fetch a sponsor's full active pipeline",
+      "curl": "curl -H 'Authorization: Bearer KEY' \\\n  'https://clinicaltrials-clean.trygve-api.workers.dev/sponsors/Pfizer/studies?status=RECRUITING'",
+      "python": "import httpx\n\nr = httpx.get(\n    \"https://clinicaltrials-clean.trygve-api.workers.dev/sponsors/Pfizer/studies\",\n    headers={\"Authorization\": \"Bearer KEY\"},\n    params={\"status\": \"RECRUITING\"},\n)\npipeline = r.json()[\"studies\"]\nprint(f\"{len(pipeline)} active Pfizer trials across {len({s['condition'] for s in pipeline})} conditions\")",
+      "js": "const r = await fetch(\n  \"https://clinicaltrials-clean.trygve-api.workers.dev/sponsors/Pfizer/studies?status=RECRUITING\",\n  { headers: { Authorization: \"Bearer KEY\" } }\n);\nconst { studies } = await r.json();\nconst conditions = new Set(studies.map(s => s.condition));\nconsole.log(`${studies.length} trials across ${conditions.size} conditions`);"
+    },
+    {
+      "title": "Register a status-change webhook on a specific trial",
+      "curl": "curl -X POST \\\n  -H 'Authorization: Bearer KEY' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"nct_id\":\"NCT02835729\",\"url\":\"https://your-app.com/hooks/trials\"}' \\\n  'https://clinicaltrials-clean.trygve-api.workers.dev/webhooks'",
+      "python": "import httpx\n\nr = httpx.post(\n    \"https://clinicaltrials-clean.trygve-api.workers.dev/webhooks\",\n    headers={\"Authorization\": \"Bearer KEY\"},\n    json={\n        \"nct_id\": \"NCT02835729\",\n        \"url\": \"https://your-app.com/hooks/trials\",\n    },\n)\n# {\"webhook_id\": \"wh_abc123\", \"status\": \"active\", \"nct_id\": \"NCT02835729\"}\nprint(r.json())",
+      "js": "const r = await fetch(\n  \"https://clinicaltrials-clean.trygve-api.workers.dev/webhooks\",\n  {\n    method: \"POST\",\n    headers: { Authorization: \"Bearer KEY\", \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ nct_id: \"NCT02835729\", url: \"https://your-app.com/hooks/trials\" }),\n  }\n);\nconst { webhook_id } = await r.json();\nconsole.log(webhook_id); // wh_abc123"
+    }
+  ],
+  "faq": [
+    {
+      "q": "Why wrap a free, public API at all?",
+      "a": "ClinicalTrials.gov v2 returns valid but deeply nested JSON modeled after FHIR. Sponsor names appear in 3\u20135 variations across records; conditions are coded arrays, not strings; phase labels are inconsistently cased. Getting a flat, filterable row out of one study takes 20\u201340 lines of parsing code. This wrapper does that once, consistently, for every study."
+    },
+    {
+      "q": "How current is the data?",
+      "a": "ClinicalTrials.gov publishes daily updates. Endpoints are cached for 1 hour by default; the Pro plan lets you set a custom TTL per request via the `Cache-Control` header. Webhook checks run against the latest daily snapshot every 6 hours."
+    },
+    {
+      "q": "What does a status-change webhook payload look like?",
+      "a": "A POST to your registered URL with: `{\"nct_id\": \"NCT02835729\", \"event\": \"status_changed\", \"old_status\": \"RECRUITING\", \"new_status\": \"ACTIVE_NOT_RECRUITING\", \"changed_at\": \"2025-11-12T08:00:00Z\", \"diff\": {\"enrollment\": {\"old\": 240, \"new\": 240}, \"completion_date\": {\"old\": null, \"new\": \"2026-03-01\"}}}`. Delivery is retried up to 3 times with exponential backoff on non-2xx responses."
+    },
+    {
+      "q": "Which plans include webhooks and what are the rate limits?",
+      "a": "Basic ($20/mo): study search and sponsor endpoints, 10,000 requests/month, no webhooks. Pro ($50/mo): all endpoints, 100,000 requests/month, up to 50 active webhooks. Enterprise: custom limits and SLA. Overage is billed at $0.002 per request."
+    },
+    {
+      "q": "Can I query by NCT ID directly, or only by condition and sponsor?",
+      "a": "Both. `GET /studies/{nct_id}` returns a single normalized study object. Bulk endpoints accept `condition`, `sponsor`, `phase`, `status`, `country`, `start_date_from`, and `start_date_to` as query parameters, combinable in any order."
+    }
+  ]
+}
